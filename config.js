@@ -43,7 +43,7 @@ export const PROFILES = {
 // Clé publique beta intégrée par défaut (fonctionne immédiatement, rate-limitée).
 // Pour ton propre quota gratuit illimité : https://developers.giphy.com/dashboard/
 // (signup 1 min → create app → copie la "API Key" et remplace ci-dessous)
-export const GIPHY_API_KEY = "dc6zaTOxFJmzC";
+export const GIPHY_API_KEY = "cyCrIV4mikzLBDKl4iA5qIwkB6CXwWy4";
 
 // Identité par défaut (si pas de ?me= et pas de localStorage)
 // Mets l'id de la personne qui utilise le plus souvent ce site sur cet appareil.

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#fef3e2">
+  <title>Cat Chat — meow meow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='8' y='4' width='4' height='4' fill='%23f4a261'/%3E%3Crect x='20' y='4' width='4' height='4' fill='%23f4a261'/%3E%3Crect x='6' y='8' width='20' height='16' fill='%23f4a261'/%3E%3Crect x='10' y='14' width='3' height='3' fill='%23000'/%3E%3Crect x='19' y='14' width='3' height='3' fill='%23000'/%3E%3Crect x='14' y='19' width='4' height='2' fill='%23e76f51'/%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- =========== LOGIN SCREEN =========== -->
+  <section id="login-screen" class="screen active">
+    <div class="login-container">
+      <div class="title-block">
+        <h1 class="title">
+          <span class="title-meow">~ Cat Chat ~</span>
+        </h1>
+        <p class="subtitle blink">PRESS ANY KITTY TO START</p>
+      </div>
+
+      <div class="cat-floor">
+        <!-- Decorative wandering pixel cats -->
+        <div class="wander-cat wander-cat-1">
+          <svg viewBox="0 0 32 32" width="64" height="64" shape-rendering="crispEdges">
+            <rect x="6" y="4" width="4" height="4" fill="#f4a261"/>
+            <rect x="22" y="4" width="4" height="4" fill="#f4a261"/>
+            <rect x="4" y="8" width="24" height="14" fill="#f4a261"/>
+            <rect x="4" y="22" width="24" height="6" fill="#f4a261"/>
+            <rect x="9" y="13" width="3" height="3" fill="#1a1a1a"/>
+            <rect x="20" y="13" width="3" height="3" fill="#1a1a1a"/>
+            <rect x="14" y="18" width="4" height="2" fill="#e76f51"/>
+            <rect x="0" y="22" width="4" height="3" fill="#f4a261"/>
+            <rect x="6" y="28" width="4" height="2" fill="#f4a261"/>
+            <rect x="14" y="28" width="4" height="2" fill="#f4a261"/>
+            <rect x="22" y="28" width="4" height="2" fill="#f4a261"/>
+          </svg>
+        </div>
+        <div class="wander-cat wander-cat-2">
+          <svg viewBox="0 0 32 32" width="56" height="56" shape-rendering="crispEdges">
+            <rect x="6" y="4" width="4" height="4" fill="#2a2a2a"/>
+            <rect x="22" y="4" width="4" height="4" fill="#2a2a2a"/>
+            <rect x="4" y="8" width="24" height="14" fill="#2a2a2a"/>
+            <rect x="4" y="22" width="24" height="6" fill="#2a2a2a"/>
+            <rect x="9" y="13" width="3" height="3" fill="#a8e063"/>
+            <rect x="20" y="13" width="3" height="3" fill="#a8e063"/>
+            <rect x="14" y="18" width="4" height="2" fill="#ff6b9d"/>
+            <rect x="0" y="22" width="4" height="3" fill="#2a2a2a"/>
+            <rect x="6" y="28" width="4" height="2" fill="#2a2a2a"/>
+            <rect x="14" y="28" width="4" height="2" fill="#2a2a2a"/>
+            <rect x="22" y="28" width="4" height="2" fill="#2a2a2a"/>
+          </svg>
+        </div>
+        <div class="wander-cat wander-cat-3">
+          <svg viewBox="0 0 32 32" width="48" height="48" shape-rendering="crispEdges">
+            <rect x="6" y="4" width="4" height="4" fill="#e9c46a"/>
+            <rect x="22" y="4" width="4" height="4" fill="#e9c46a"/>
+            <rect x="4" y="8" width="24" height="14" fill="#e9c46a"/>
+            <rect x="4" y="22" width="24" height="6" fill="#e9c46a"/>
+            <rect x="9" y="13" width="3" height="3" fill="#1a1a1a"/>
+            <rect x="20" y="13" width="3" height="3" fill="#1a1a1a"/>
+            <rect x="14" y="18" width="4" height="2" fill="#e76f51"/>
+            <rect x="8" y="10" width="2" height="2" fill="#d4a847"/>
+            <rect x="14" y="14" width="3" height="2" fill="#d4a847"/>
+            <rect x="20" y="11" width="2" height="2" fill="#d4a847"/>
+          </svg>
+        </div>
+      </div>
+
+      <h2 class="select-text">— SELECT YOUR CAT —</h2>
+
+      <div class="profile-grid" id="profile-grid">
+        <!-- Profiles will be injected by JS from config.js -->
+      </div>
+
+      <div class="footer-tip">
+        <span class="paw">🐾</span>
+        <span>Your friend picks the other kitty. Then you chat. Simple.</span>
+        <span class="paw">🐾</span>
+      </div>
+    </div>
+
+    <!-- Password modal -->
+    <div id="password-modal" class="modal hidden">
+      <div class="modal-content pixel-box">
+        <button class="modal-close" id="password-cancel">✕</button>
+        <h3 id="password-title">Enter password</h3>
+        <p id="password-hint" class="hint">type your secret meow</p>
+        <input type="password" id="password-input" class="pixel-input" placeholder="••••••" autocomplete="off">
+        <p id="password-error" class="error hidden">Wrong password, silly cat 🙀</p>
+        <button id="password-submit" class="pixel-btn">ENTER →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========== CHAT SCREEN =========== -->
+  <section id="chat-screen" class="screen">
+    <header class="chat-header pixel-box">
+      <button id="leave-btn" class="header-btn" title="Leave chat">←</button>
+      <div class="header-center">
+        <div class="header-avatar" id="header-avatar"></div>
+        <div class="header-info">
+          <div class="header-title">CAT CHAT</div>
+          <div class="header-sub" id="header-sub">talking with ...</div>
+        </div>
+      </div>
+      <button id="sound-btn" class="header-btn" title="Toggle sound">🔊</button>
+    </header>
+
+    <main class="messages-wrap">
+      <div id="messages" class="messages">
+        <!-- Connection placeholder before Firebase loads -->
+        <div class="system-message" id="connecting-msg">
+          <span class="loader-dot"></span>
+          <span class="loader-dot"></span>
+          <span class="loader-dot"></span>
+          <span style="margin-left:8px;">connecting to the cat server...</span>
+        </div>
+      </div>
+      <div class="typing-indicator hidden" id="typing-indicator">
+        <span class="typing-name" id="typing-name"></span>
+        <span class="typing-dots">
+          <span></span><span></span><span></span>
+        </span>
+        <span>is typing</span>
+      </div>
+    </main>
+
+    <!-- GIF picker -->
+    <div id="gif-picker" class="gif-picker hidden">
+      <div class="gif-picker-header">
+        <input type="text" id="gif-search" class="pixel-input" placeholder="search cats, food, mood...">
+        <button id="gif-close" class="pixel-btn-small">✕</button>
+      </div>
+      <div class="gif-grid" id="gif-grid">
+        <div class="gif-loading">type something to search GIFs</div>
+      </div>
+      <div class="gif-credit">Powered by Tenor</div>
+    </div>
+
+    <!-- Emoji reaction picker -->
+    <div id="reaction-picker" class="reaction-picker hidden">
+      <button class="reaction-btn" data-emoji="❤️">❤️</button>
+      <button class="reaction-btn" data-emoji="😂">😂</button>
+      <button class="reaction-btn" data-emoji="😮">😮</button>
+      <button class="reaction-btn" data-emoji="😢">😢</button>
+      <button class="reaction-btn" data-emoji="🔥">🔥</button>
+      <button class="reaction-btn" data-emoji="🐱">🐱</button>
+      <button class="reaction-btn" data-emoji="👍">👍</button>
+    </div>
+
+    <footer class="composer pixel-box">
+      <button id="gif-btn" class="composer-btn" title="Send GIF">GIF</button>
+      <button id="emoji-btn" class="composer-btn" title="Emoji">😺</button>
+      <input type="text" id="msg-input" class="msg-input" placeholder="say something nice..." maxlength="1000" autocomplete="off">
+      <button id="send-btn" class="send-btn" title="Send">
+        <svg viewBox="0 0 16 16" width="20" height="20" shape-rendering="crispEdges">
+          <rect x="2" y="7" width="10" height="2" fill="currentColor"/>
+          <rect x="10" y="5" width="2" height="6" fill="currentColor"/>
+          <rect x="12" y="6" width="1" height="4" fill="currentColor"/>
+          <rect x="13" y="7" width="1" height="2" fill="currentColor"/>
+        </svg>
+      </button>
+    </footer>
+
+    <!-- Emoji picker for input -->
+    <div id="emoji-picker" class="emoji-picker hidden">
+      <div class="emoji-row">
+        <span class="emoji-pick">🐱</span><span class="emoji-pick">😻</span><span class="emoji-pick">😹</span><span class="emoji-pick">😼</span><span class="emoji-pick">😽</span><span class="emoji-pick">🙀</span><span class="emoji-pick">😿</span><span class="emoji-pick">😾</span>
+      </div>
+      <div class="emoji-row">
+        <span class="emoji-pick">❤️</span><span class="emoji-pick">😂</span><span class="emoji-pick">🥹</span><span class="emoji-pick">🤣</span><span class="emoji-pick">😍</span><span class="emoji-pick">🥰</span><span class="emoji-pick">😘</span><span class="emoji-pick">😎</span>
+      </div>
+      <div class="emoji-row">
+        <span class="emoji-pick">🔥</span><span class="emoji-pick">✨</span><span class="emoji-pick">💀</span><span class="emoji-pick">🎉</span><span class="emoji-pick">👀</span><span class="emoji-pick">🫶</span><span class="emoji-pick">🐾</span><span class="emoji-pick">🐟</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Firebase SDK (modular v10, via CDN) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>

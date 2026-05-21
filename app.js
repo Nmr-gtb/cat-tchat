@@ -13,11 +13,13 @@ import {
   push,
   onChildAdded,
   set,
+  update,
   onValue,
   onDisconnect,
   serverTimestamp,
   query,
-  limitToLast
+  limitToLast,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 import { FIREBASE_CONFIG, ROOM_ID, PROFILES, DEFAULT_IDENTITY, GIPHY_API_KEY } from "./config.js";
@@ -188,9 +190,27 @@ function renderMessage(msg, animate = false) {
   hideEmptyState();
   const isMine = msg.author === MY_ID;
   const isGif = msg.type === "gif" && msg.gifUrl;
+  const isGame = msg.type === "game" && msg.gameId;
   const el = document.createElement("div");
-  el.className = `msg ${isMine ? "user" : "assistant"}`;
+  el.className = `msg ${isMine ? "user" : "assistant"} ${isGame ? "game" : ""}`;
   el.dataset.id = msg.id;
+
+  // Game messages always render as assistant style (ChatGPT widget), regardless of author
+  if (isGame) {
+    el.className = "msg assistant game";
+    el.innerHTML = `
+      <div class="assistant-avatar">${GPT_LOGO_SVG}</div>
+      <div class="msg-body">
+        <div class="msg-content game-widget" id="game-${msg.gameId}"></div>
+      </div>`;
+    els.messages.appendChild(el);
+    const content = el.querySelector(".game-widget");
+    if (msg.gameType === "connect4") {
+      subscribeToGame(msg.gameId, content);
+    }
+    scrollToBottom();
+    return;
+  }
 
   if (isMine) {
     if (isGif) {
@@ -323,6 +343,251 @@ async function handleSend() {
   updateSendBtnState();
   await sendMessageToDB(text);
   els.input.focus();
+}
+
+// ---------------- Plus Menu (above + button) ----------------
+let plusMenuOpen = false;
+
+function buildPlusMenu() {
+  if (document.getElementById("plus-menu")) return;
+  const m = document.createElement("div");
+  m.id = "plus-menu";
+  m.className = "plus-menu hidden";
+  m.innerHTML = `
+    <button class="plus-menu-item" data-action="gif">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M9 8v8M9 12h3v4M14 8h3M14 12h2M14 8v8"/></svg>
+      <span>Send a GIF</span>
+    </button>
+    <button class="plus-menu-item" data-action="connect4">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><circle cx="12" cy="8" r="1.5"/><circle cx="16" cy="8" r="1.5"/><circle cx="8" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="8" cy="16" r="1.5"/><circle cx="12" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/></svg>
+      <span>Play Connect 4</span>
+    </button>
+  `;
+  document.body.appendChild(m);
+  m.querySelectorAll(".plus-menu-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.action;
+      closePlusMenu();
+      if (action === "gif") openGifPicker();
+      if (action === "connect4") startNewConnect4();
+    });
+  });
+}
+
+function positionPlusMenu() {
+  const m = document.getElementById("plus-menu");
+  const attachBtn = document.getElementById("attach-btn");
+  if (!m || !attachBtn) return;
+  const rect = attachBtn.getBoundingClientRect();
+  m.style.left = rect.left + "px";
+  m.style.bottom = (window.innerHeight - rect.top + 8) + "px";
+}
+
+function openPlusMenu() {
+  buildPlusMenu();
+  document.getElementById("plus-menu").classList.remove("hidden");
+  plusMenuOpen = true;
+  positionPlusMenu();
+}
+
+function closePlusMenu() {
+  const m = document.getElementById("plus-menu");
+  if (m) m.classList.add("hidden");
+  plusMenuOpen = false;
+}
+
+// ---------------- Connect 4 game ----------------
+const C4_ROWS = 6;
+const C4_COLS = 7;
+const activeGameListeners = new Map();    // gameId -> unsubscribe
+
+async function startNewConnect4() {
+  if (!state.ready) return;
+  // Create a fresh game
+  const gameId = `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const board = Array.from({ length: C4_ROWS }, () => Array(C4_COLS).fill(0));
+  const gameRef = ref(state.db, `rooms/${ROOM_ID}/games/${gameId}`);
+  await set(gameRef, {
+    board: board.map((row) => row.join(",")).join("|"),
+    turn: MY_ID,
+    winner: null,
+    createdBy: MY_ID,
+    createdAt: serverTimestamp()
+  });
+
+  // Send the game message
+  const messagesRef = ref(state.db, `rooms/${ROOM_ID}/messages`);
+  const newMsgRef = push(messagesRef);
+  await set(newMsgRef, {
+    author: MY_ID,
+    type: "game",
+    gameType: "connect4",
+    gameId: gameId,
+    ts: serverTimestamp()
+  });
+}
+
+function deserializeBoard(str) {
+  if (!str) return Array.from({ length: C4_ROWS }, () => Array(C4_COLS).fill(0));
+  return str.split("|").map((row) => row.split(",").map((n) => parseInt(n, 10) || 0));
+}
+
+function serializeBoard(board) {
+  return board.map((row) => row.join(",")).join("|");
+}
+
+function playerNum(id) { return id === "noe" ? 1 : 2; }
+function playerIdFromNum(n) { return n === 1 ? "noe" : (n === 2 ? "ami" : null); }
+
+function checkWinner(board) {
+  // Returns 0 (none), 1 (noe), 2 (ami)
+  const directions = [
+    [0, 1],   // horizontal
+    [1, 0],   // vertical
+    [1, 1],   // diagonal down-right
+    [1, -1],  // diagonal down-left
+  ];
+  for (let r = 0; r < C4_ROWS; r++) {
+    for (let c = 0; c < C4_COLS; c++) {
+      const v = board[r][c];
+      if (v === 0) continue;
+      for (const [dr, dc] of directions) {
+        let ok = true;
+        for (let k = 1; k < 4; k++) {
+          const nr = r + dr * k, nc = c + dc * k;
+          if (nr < 0 || nr >= C4_ROWS || nc < 0 || nc >= C4_COLS || board[nr][nc] !== v) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) return { winner: v, cells: [
+          [r, c], [r + dr, c + dc], [r + dr * 2, c + dc * 2], [r + dr * 3, c + dc * 3]
+        ] };
+      }
+    }
+  }
+  return { winner: 0, cells: [] };
+}
+
+function isBoardFull(board) {
+  return board.every((row) => row.every((cell) => cell !== 0));
+}
+
+async function dropPiece(gameId, col) {
+  if (!state.ready) return;
+  const gameRef = ref(state.db, `rooms/${ROOM_ID}/games/${gameId}`);
+  await runTransaction(gameRef, (current) => {
+    if (!current) return current;
+    if (current.winner) return; // game over, no-op
+    if (current.turn !== MY_ID) return; // not my turn
+    const board = deserializeBoard(current.board);
+    let dropRow = -1;
+    for (let r = C4_ROWS - 1; r >= 0; r--) {
+      if (board[r][col] === 0) {
+        dropRow = r;
+        break;
+      }
+    }
+    if (dropRow < 0) return; // column full
+    board[dropRow][col] = playerNum(MY_ID);
+    const { winner } = checkWinner(board);
+    const draw = !winner && isBoardFull(board);
+    return {
+      ...current,
+      board: serializeBoard(board),
+      turn: MY_ID === "noe" ? "ami" : "noe",
+      winner: winner ? playerIdFromNum(winner) : (draw ? "draw" : null)
+    };
+  });
+}
+
+function subscribeToGame(gameId, contentEl) {
+  if (activeGameListeners.has(gameId)) {
+    activeGameListeners.get(gameId)();
+  }
+  const gameRef = ref(state.db, `rooms/${ROOM_ID}/games/${gameId}`);
+  const unsub = onValue(gameRef, (snap) => {
+    const data = snap.val();
+    if (!data) {
+      contentEl.innerHTML = `<div class="game-loading">Game expired.</div>`;
+      return;
+    }
+    renderConnect4Board(contentEl, gameId, data);
+  });
+  activeGameListeners.set(gameId, unsub);
+}
+
+function renderConnect4Board(contentEl, gameId, data) {
+  const board = deserializeBoard(data.board);
+  const { winner, cells: winningCells } = checkWinner(board);
+  const winningSet = new Set(winningCells.map(([r, c]) => `${r}_${c}`));
+  const isMyTurn = data.turn === MY_ID && !data.winner;
+  const finalWinner = data.winner;
+
+  let intro;
+  if (data.createdBy === MY_ID) {
+    intro = `I've set up a Connect 4 board for you. You're playing as <strong style="color:#e74c3c;">red ●</strong>. Drop a piece by clicking a column.`;
+  } else {
+    intro = `Here's a Connect 4 game. You're playing as <strong style="color:#f1c40f;">yellow ●</strong>. Drop a piece by clicking a column.`;
+  }
+
+  let statusLine;
+  if (finalWinner === "draw") {
+    statusLine = `<span class="game-status draw">Draw — board is full.</span>`;
+  } else if (finalWinner) {
+    const wonByMe = finalWinner === MY_ID;
+    statusLine = `<span class="game-status ${wonByMe ? 'win' : 'loss'}">${wonByMe ? "You won 🎉" : "You lost."}</span>`;
+  } else if (isMyTurn) {
+    statusLine = `<span class="game-status your-turn">Your turn.</span>`;
+  } else {
+    statusLine = `<span class="game-status">Waiting for the other player…</span>`;
+  }
+
+  // Build column drop buttons
+  let colsHtml = '<div class="c4-drops">';
+  for (let c = 0; c < C4_COLS; c++) {
+    const colFull = board[0][c] !== 0;
+    const disabled = !isMyTurn || colFull || finalWinner;
+    colsHtml += `<button class="c4-drop ${disabled ? 'disabled' : ''}" data-col="${c}" ${disabled ? 'disabled' : ''} aria-label="Drop in column ${c + 1}">▼</button>`;
+  }
+  colsHtml += '</div>';
+
+  // Build grid
+  let gridHtml = '<div class="c4-board">';
+  for (let r = 0; r < C4_ROWS; r++) {
+    for (let c = 0; c < C4_COLS; c++) {
+      const v = board[r][c];
+      const colorClass = v === 1 ? "red" : v === 2 ? "yellow" : "empty";
+      const winClass = winningSet.has(`${r}_${c}`) ? " winning" : "";
+      gridHtml += `<div class="c4-cell ${colorClass}${winClass}"><span class="c4-piece"></span></div>`;
+    }
+  }
+  gridHtml += '</div>';
+
+  let actionsHtml = "";
+  if (finalWinner) {
+    actionsHtml = `<button class="c4-newgame">↻ Start a new game</button>`;
+  }
+
+  contentEl.innerHTML = `
+    <div class="game-intro">${intro}</div>
+    ${colsHtml}
+    ${gridHtml}
+    <div class="game-footer">${statusLine}</div>
+    ${actionsHtml}
+  `;
+
+  // Wire drop buttons
+  contentEl.querySelectorAll(".c4-drop").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const col = parseInt(btn.dataset.col, 10);
+      dropPiece(gameId, col);
+    });
+  });
+  // Wire new game button
+  contentEl.querySelector(".c4-newgame")?.addEventListener("click", () => {
+    startNewConnect4();
+  });
 }
 
 // ---------------- GIF Picker ----------------
@@ -461,27 +726,34 @@ function wire() {
     document.body.classList.toggle("sidebar-open");
   });
 
-  // Attach (+) button → open GIF picker
+  // Attach (+) button → open mini menu (GIFs / Connect 4)
   const attachBtn = document.getElementById("attach-btn");
   attachBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (gifPickerOpen) closeGifPicker();
-    else openGifPicker();
+    if (plusMenuOpen) closePlusMenu();
+    else openPlusMenu();
   });
 
-  // Close GIF picker on outside click / Escape
+  // Close popups on outside click / Escape
   document.addEventListener("click", (e) => {
-    const picker = document.getElementById("gif-picker");
-    if (!picker || picker.classList.contains("hidden")) return;
-    if (!picker.contains(e.target) && e.target.id !== "attach-btn" && !e.target.closest("#attach-btn")) {
+    const gp = document.getElementById("gif-picker");
+    if (gp && !gp.classList.contains("hidden") && !gp.contains(e.target) && !e.target.closest("#attach-btn")) {
       closeGifPicker();
+    }
+    const pm = document.getElementById("plus-menu");
+    if (pm && !pm.classList.contains("hidden") && !pm.contains(e.target) && !e.target.closest("#attach-btn")) {
+      closePlusMenu();
     }
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && gifPickerOpen) closeGifPicker();
+    if (e.key === "Escape") {
+      if (gifPickerOpen) closeGifPicker();
+      if (plusMenuOpen) closePlusMenu();
+    }
   });
   window.addEventListener("resize", () => {
     if (gifPickerOpen) positionGifPicker();
+    if (plusMenuOpen) positionPlusMenu();
   });
 
   // Suggestion chips → fill the input

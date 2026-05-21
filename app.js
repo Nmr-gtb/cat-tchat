@@ -20,7 +20,7 @@ import {
   limitToLast
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-import { FIREBASE_CONFIG, ROOM_ID, PROFILES, DEFAULT_IDENTITY } from "./config.js";
+import { FIREBASE_CONFIG, ROOM_ID, PROFILES, DEFAULT_IDENTITY, GIPHY_API_KEY } from "./config.js";
 
 // ---------------- Identity ----------------
 // We read ?me=X from URL on first visit, persist in localStorage, then clean the URL.
@@ -132,16 +132,8 @@ function loadMessages() {
 }
 
 function loadTyping() {
-  const otherTypingRef = ref(state.db, `rooms/${ROOM_ID}/typing/${OTHER.id}`);
-  onValue(otherTypingRef, (snap) => {
-    const t = snap.val();
-    if (t) {
-      els.typingStatus.textContent = ME.showTypingLabel ? `${OTHER.name} is typing…` : "";
-      els.typingStatus.classList.add("visible");
-    } else {
-      els.typingStatus.classList.remove("visible");
-    }
-  });
+  // Volontairement vide : aucun indicateur "X is typing" pour préserver le déguisement.
+  // Les dots de frappe apparaissent uniquement dans la bulle au moment où le message arrive.
 }
 
 async function sendMessageToDB(text) {
@@ -156,6 +148,18 @@ async function sendMessageToDB(text) {
     ts: serverTimestamp()
   });
   clearTyping();
+}
+
+async function sendGifToDB(gifUrl) {
+  if (!state.ready || !gifUrl) return;
+  const messagesRef = ref(state.db, `rooms/${ROOM_ID}/messages`);
+  const newRef = push(messagesRef);
+  await set(newRef, {
+    author: MY_ID,
+    type: "gif",
+    gifUrl: gifUrl,
+    ts: serverTimestamp()
+  });
 }
 
 function setTyping() {
@@ -183,19 +187,37 @@ const GPT_LOGO_SVG = `
 function renderMessage(msg, animate = false) {
   hideEmptyState();
   const isMine = msg.author === MY_ID;
+  const isGif = msg.type === "gif" && msg.gifUrl;
   const el = document.createElement("div");
   el.className = `msg ${isMine ? "user" : "assistant"}`;
   el.dataset.id = msg.id;
 
   if (isMine) {
-    el.innerHTML = `<div class="msg-bubble-user"></div>`;
-    el.querySelector(".msg-bubble-user").textContent = msg.text || "";
+    if (isGif) {
+      el.innerHTML = `<div class="msg-gif user-gif"><img alt="image" loading="lazy"></div>`;
+      el.querySelector("img").src = msg.gifUrl;
+    } else {
+      el.innerHTML = `<div class="msg-bubble-user"></div>`;
+      el.querySelector(".msg-bubble-user").textContent = msg.text || "";
+    }
     els.messages.appendChild(el);
     scrollToBottom();
     return;
   }
 
   // Assistant-style (other user's message)
+  if (isGif) {
+    el.innerHTML = `
+      <div class="assistant-avatar">${GPT_LOGO_SVG}</div>
+      <div class="msg-body">
+        <div class="msg-gif"><img alt="image" loading="lazy"></div>
+      </div>`;
+    el.querySelector("img").src = msg.gifUrl;
+    els.messages.appendChild(el);
+    scrollToBottom();
+    return;
+  }
+
   el.innerHTML = `
     <div class="assistant-avatar">${GPT_LOGO_SVG}</div>
     <div class="msg-body">
@@ -303,6 +325,109 @@ async function handleSend() {
   els.input.focus();
 }
 
+// ---------------- GIF Picker ----------------
+let gifSearchTimeout = null;
+let gifPickerOpen = false;
+
+function buildGifPicker() {
+  if (document.getElementById("gif-picker")) return;
+  const picker = document.createElement("div");
+  picker.id = "gif-picker";
+  picker.className = "gif-picker hidden";
+  picker.innerHTML = `
+    <div class="gif-picker-header">
+      <input type="text" id="gif-search" placeholder="Search GIFs..." autocomplete="off">
+      <button type="button" id="gif-close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="gif-grid" id="gif-grid">
+      <div class="gif-empty">Search to find GIFs</div>
+    </div>
+    <div class="gif-credit">Powered by GIPHY</div>
+  `;
+  document.body.appendChild(picker);
+  document.getElementById("gif-search").addEventListener("input", (e) => {
+    clearTimeout(gifSearchTimeout);
+    gifSearchTimeout = setTimeout(() => searchGifs(e.target.value), 350);
+  });
+  document.getElementById("gif-close").addEventListener("click", closeGifPicker);
+}
+
+function positionGifPicker() {
+  const picker = document.getElementById("gif-picker");
+  const composer = document.querySelector(".composer");
+  if (!picker || !composer) return;
+  const rect = composer.getBoundingClientRect();
+  picker.style.left = rect.left + "px";
+  picker.style.width = rect.width + "px";
+  picker.style.bottom = (window.innerHeight - rect.top + 8) + "px";
+}
+
+function openGifPicker() {
+  buildGifPicker();
+  const picker = document.getElementById("gif-picker");
+  picker.classList.remove("hidden");
+  gifPickerOpen = true;
+  positionGifPicker();
+  setTimeout(() => {
+    document.getElementById("gif-search")?.focus();
+  }, 50);
+  // Auto-search trending on open
+  searchGifs("");
+}
+
+function closeGifPicker() {
+  const picker = document.getElementById("gif-picker");
+  if (picker) picker.classList.add("hidden");
+  gifPickerOpen = false;
+}
+
+async function searchGifs(query) {
+  const grid = document.getElementById("gif-grid");
+  if (!grid) return;
+  if (!GIPHY_API_KEY) {
+    grid.innerHTML = `<div class="gif-empty">GIF search needs a Giphy API key.<br>Add one in <code>config.js</code> &rarr; <code>GIPHY_API_KEY</code></div>`;
+    return;
+  }
+  grid.innerHTML = `<div class="gif-empty">Searching…</div>`;
+  try {
+    const trimmed = (query || "").trim();
+    let url;
+    if (trimmed) {
+      url = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(trimmed)}&limit=21&rating=pg-13&bundle=messaging_non_clips`;
+    } else {
+      url = `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=21&rating=pg-13&bundle=messaging_non_clips`;
+    }
+    const res = await fetch(url);
+    const data = await res.json();
+    const results = data.data || [];
+    if (results.length === 0) {
+      grid.innerHTML = `<div class="gif-empty">No GIFs found.</div>`;
+      return;
+    }
+    grid.innerHTML = "";
+    results.forEach((r) => {
+      const tiny = r.images?.fixed_width_small?.url || r.images?.fixed_width?.url;
+      const full = r.images?.original?.url || r.images?.downsized?.url || tiny;
+      if (!tiny) return;
+      const img = document.createElement("img");
+      img.className = "gif-item";
+      img.src = tiny;
+      img.loading = "lazy";
+      img.alt = r.title || "gif";
+      img.addEventListener("click", () => {
+        sendGifToDB(full);
+        closeGifPicker();
+      });
+      grid.appendChild(img);
+    });
+  } catch (err) {
+    console.error("GIF search error:", err);
+    grid.innerHTML = `<div class="gif-empty">Could not load GIFs.</div>`;
+  }
+}
+
 // ---------------- Events ----------------
 function wire() {
   els.composer.addEventListener("submit", (e) => {
@@ -334,6 +459,29 @@ function wire() {
   els.openSidebar?.addEventListener("click", () => {
     els.sidebar.classList.toggle("open");
     document.body.classList.toggle("sidebar-open");
+  });
+
+  // Attach (+) button → open GIF picker
+  const attachBtn = document.getElementById("attach-btn");
+  attachBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (gifPickerOpen) closeGifPicker();
+    else openGifPicker();
+  });
+
+  // Close GIF picker on outside click / Escape
+  document.addEventListener("click", (e) => {
+    const picker = document.getElementById("gif-picker");
+    if (!picker || picker.classList.contains("hidden")) return;
+    if (!picker.contains(e.target) && e.target.id !== "attach-btn" && !e.target.closest("#attach-btn")) {
+      closeGifPicker();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && gifPickerOpen) closeGifPicker();
+  });
+  window.addEventListener("resize", () => {
+    if (gifPickerOpen) positionGifPicker();
   });
 
   // Suggestion chips → fill the input

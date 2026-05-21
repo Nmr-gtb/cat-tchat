@@ -33,11 +33,17 @@ export const PROFILES = {
   },
   ami: {
     id: "ami",
-    name: "Camille",              // remplace par le prénom de ton ami
+    name: "Mikael",               // utilisé seulement côté Mikael, jamais visible à quelqu'un d'autre
     accountColor: "#5b6cf5",
-    showTypingLabel: true
+    showTypingLabel: false        // jamais d'indicateur "X is typing" (préserve le déguisement)
   }
 };
+
+// Giphy API key (GIFs)
+// Clé publique beta intégrée par défaut (fonctionne immédiatement, rate-limitée).
+// Pour ton propre quota gratuit illimité : https://developers.giphy.com/dashboard/
+// (signup 1 min → create app → copie la "API Key" et remplace ci-dessous)
+export const GIPHY_API_KEY = "dc6zaTOxFJmzC";
 
 // Identité par défaut (si pas de ?me= et pas de localStorage)
 // Mets l'id de la personne qui utilise le plus souvent ce site sur cet appareil.

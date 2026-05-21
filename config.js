@@ -1,14 +1,7 @@
 // ============================================================
-// CONFIG — Remplis ce fichier avec tes infos avant de déployer
+// CONFIG
 // ============================================================
-//
-// 1. Va sur https://console.firebase.google.com/
-// 2. Crée un projet (gratuit, "Spark plan")
-// 3. Active "Realtime Database" en mode test (ou prod avec rules ci-dessous)
-// 4. Active "Authentication > Anonymous"
-// 5. Copie ta config Firebase ici (Settings > Project settings > Your apps > SDK setup)
-//
-// Pour les GIFs : https://tenor.com/gifapi/documentation  (gratuit, 5 min)
+// Firebase config (déjà rempli, ne pas modifier sauf nouveau projet)
 // ============================================================
 
 export const FIREBASE_CONFIG = {
@@ -21,40 +14,31 @@ export const FIREBASE_CONFIG = {
   appId: "1:596294876027:web:3416ec3687d7ca59235bde"
 };
 
-// Identifiant unique de la salle de chat (n'importe quelle chaîne secrète)
-// Change-la pour avoir une autre conversation séparée
-export const ROOM_ID = "salon-prive-meow-001";
-
-// Tenor API key (https://developers.google.com/tenor/guides/quickstart)
-// Optionnel : si vide, le bouton GIF affichera un message d'erreur élégant
-export const TENOR_API_KEY = "";
+// Identifiant unique de la salle de chat
+export const ROOM_ID = "room-prive-001";
 
 // ============================================================
-// LES DEUX PROFILS
+// PROFILS — deux personnes qui partagent ce chat
 // ============================================================
-// Modifie ces deux profils : noms, mots de passe, couleur du chat, tagline
-// Le "password" est juste pour empêcher l'autre de prendre ton identité — pas une vraie sécurité
+// Chaque appareil mémorise son identité après une première visite
+// via ?me=noe ou ?me=ami dans l'URL. Aucun login visible ensuite.
 // ============================================================
 
 export const PROFILES = {
   noe: {
     id: "noe",
-    name: "Noé",
-    tagline: "le chat orange suspect",
-    password: "matou",
-    catColor: "#f4a261",      // couleur principale du chat
-    catAccent: "#e76f51",     // accents (oreilles intérieures, nez, rayures)
-    catEyes: "#1a1a1a",
-    eyeShine: "#a8e063"       // reflet dans l'œil
+    name: "Noé",                  // ton prénom affiché en bas de la sidebar
+    accountColor: "#b76e00",      // couleur du cercle avatar
+    showTypingLabel: true         // "X is typing" visible ou pas
   },
   ami: {
     id: "ami",
-    name: "Mon ami",
-    tagline: "le chat noir mystérieux",
-    password: "minou",
-    catColor: "#2a2a2a",
-    catAccent: "#ff6b9d",
-    catEyes: "#e9c46a",
-    eyeShine: "#fef3e2"
+    name: "Camille",              // remplace par le prénom de ton ami
+    accountColor: "#5b6cf5",
+    showTypingLabel: true
   }
 };
+
+// Identité par défaut (si pas de ?me= et pas de localStorage)
+// Mets l'id de la personne qui utilise le plus souvent ce site sur cet appareil.
+export const DEFAULT_IDENTITY = "noe";
